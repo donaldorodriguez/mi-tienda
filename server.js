@@ -35,8 +35,8 @@ const CONFIG = {
 // y reemplaza los IDs aquí
 // ══════════════════════════════════════════════
 const IMAGENES = {
-  flyer  : 'https://drive.google.com/uc?export=download&id=1Qm5I2w9keXUSc4yHC2FcQ3WEp9uNJI5l',
-  muestra: 'https://drive.google.com/uc?export=download&id=1Fe5UtlC_h4AwNk_iGaxWmLBwTbAH11rZ',
+  flyer  : 'https://lh3.googleusercontent.com/d/1Qm5I2w9keXUSc4yHC2FcQ3WEp9uNJI5l',
+  muestra: 'https://lh3.googleusercontent.com/d/1Fe5UtlC_h4AwNk_iGaxWmLBwTbAH11rZ',
 };
 
 // ══════════════════════════════════════════════
@@ -148,10 +148,15 @@ async function enviarImagen(telefono, urlImagen, caption = '') {
         media    : urlImagen,
         caption  : caption,
       },
-      { headers: EVO_HEADERS }
+      { headers: EVO_HEADERS, timeout: 20000 }
     );
+    console.log(`🖼️ Imagen enviada → ${telefono}`);
   } catch (e) {
-    console.error(`❌ enviarImagen:`, e.response?.data || e.message);
+    console.error(`❌ enviarImagen falló:`, e.response?.data || e.message);
+    // Fallback: si la imagen falla, enviar el texto solo
+    if (caption) {
+      await enviarTexto(telefono, caption);
+    }
   }
 }
 
@@ -299,10 +304,11 @@ async function procesarTexto(telefono, texto) {
 
     // Parte 1: imagen flyer + texto
     await enviarImagen(telefono, IMAGENES.flyer, SALUDO_MSG1);
-    await esperar(1500);
+    await esperar(2500);
 
     // Parte 2: imagen muestra + precio + pregunta de pago
     await enviarImagen(telefono, IMAGENES.muestra, SALUDO_MSG2);
+    await esperar(500);
 
     sesion.mensajes.push({ role: 'user', content: texto });
     sesion.mensajes.push({ role: 'assistant', content: SALUDO_MSG1 + '\n\n' + SALUDO_MSG2 });
