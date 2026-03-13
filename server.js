@@ -137,28 +137,8 @@ async function enviarTexto(telefono, texto) {
   }
 }
 
-async function enviarImagen(telefono, urlImagen, caption = '') {
-  try {
-    await axios.post(
-      `${CONFIG.EVOLUTION_URL}/message/sendMedia/${CONFIG.EVOLUTION_INSTANCE}`,
-      {
-        number   : telefono,
-        mediatype: 'image',
-        mimetype : 'image/jpeg',
-        media    : urlImagen,
-        caption  : caption,
-      },
-      { headers: EVO_HEADERS, timeout: 20000 }
-    );
-    console.log(`🖼️ Imagen enviada → ${telefono}`);
-  } catch (e) {
-    console.error(`❌ enviarImagen falló:`, e.response?.data || e.message);
-    // Fallback: si la imagen falla, enviar el texto solo
-    if (caption) {
-      await enviarTexto(telefono, caption);
-    }
-  }
-}
+// enviarImagen desactivada temporalmente — Evolution API rechaza el formato
+// async function enviarImagen(...) {}
 
 async function entregarProducto(telefono) {
   try {
@@ -298,17 +278,13 @@ async function claudeVision(imagenBase64, mediaType) {
 async function procesarTexto(telefono, texto) {
   const sesion = getSesion(telefono);
 
-  // ── PRIMER MENSAJE → bienvenida en 2 partes con imágenes ──
+  // ── PRIMER MENSAJE → bienvenida en 2 partes (solo texto) ──
   if (sesion.estado === 'nuevo') {
     sesion.estado = 'esperando_decision';
 
-    // Parte 1: imagen flyer + texto
-    await enviarImagen(telefono, IMAGENES.flyer, SALUDO_MSG1);
-    await esperar(2500);
-
-    // Parte 2: imagen muestra + precio + pregunta de pago
-    await enviarImagen(telefono, IMAGENES.muestra, SALUDO_MSG2);
-    await esperar(500);
+    await enviarTexto(telefono, SALUDO_MSG1);
+    await esperar(2000);
+    await enviarTexto(telefono, SALUDO_MSG2);
 
     sesion.mensajes.push({ role: 'user', content: texto });
     sesion.mensajes.push({ role: 'assistant', content: SALUDO_MSG1 + '\n\n' + SALUDO_MSG2 });
