@@ -35,8 +35,8 @@ const CONFIG = {
 // y reemplaza los IDs aquí
 // ══════════════════════════════════════════════
 const IMAGENES = {
-  flyer  : 'https://lh3.googleusercontent.com/d/1Qm5I2w9keXUSc4yHC2FcQ3WEp9uNJI5l',
-  muestra: 'https://lh3.googleusercontent.com/d/1Fe5UtlC_h4AwNk_iGaxWmLBwTbAH11rZ',
+  flyer  : 'https://i.imgur.com/5wZnZIr.jpeg',
+  muestra: 'https://i.imgur.com/rnuHfuF.jpeg',
 };
 
 // ══════════════════════════════════════════════
