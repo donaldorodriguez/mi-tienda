@@ -1,6 +1,15 @@
 /**
- * BOT WHATSAPP IA — MEGA PACK ICFES 2026 🇨🇴
- * Stack: Evolution API + Claude AI + Express
+ * BOT WHATSAPP IA — INFOPRODUCTOS COLOMBIA 🇨🇴
+ * ─────────────────────────────────────────────
+ * Stack:
+ *   - Evolution API  → conectar WhatsApp (ya configurado)
+ *   - Claude AI      → conversación + verificación de capturas
+ *   - Express        → servidor webhook
+ *
+ * Flujo:
+ *   Cliente escribe → IA vende → Bot da datos de pago →
+ *   Cliente manda captura → Claude verifica →
+ *   Si OK → Bot entrega link del producto
  */
 
 const express = require('express');
@@ -12,83 +21,47 @@ app.use(express.json({ limit: '10mb' }));
 // ⚙️  CONFIGURACIÓN
 // ══════════════════════════════════════════════
 const CONFIG = {
-  ANTHROPIC_API_KEY   : process.env.ANTHROPIC_API_KEY,
+  // Claude AI — pon tu API key en las variables de entorno de Railway
+  ANTHROPIC_API_KEY  : process.env.ANTHROPIC_API_KEY,
 
-  EVOLUTION_URL       : 'https://evolution-api-production-905e.up.railway.app',
-  EVOLUTION_API_KEY   : 'db25dfe6adad17eeea9555433007cccad3372320ae2f9051ba8a4791694aa3db',
-  EVOLUTION_INSTANCE  : 'Mi-tienda',
+  // Evolution API
+  EVOLUTION_URL      : 'https://evolution-api-production-905e.up.railway.app',
+  EVOLUTION_API_KEY  : 'db25dfe6adad17eeea9555433007cccad3372320ae2f9051ba8a4791694aa3db',
+  EVOLUTION_INSTANCE : 'Mi-tienda',
 
+  // Datos de cobro
   NEQUI_NUMERO        : '3003843676',
   LLAVE_BREB          : '3003843676',
-  NOMBRE_TITULAR_REAL : 'Andrea Hernandez',
-  NOMBRE_TITULAR_REAL2: 'Andrea Hernandez Salcedo',
-  NOMBRE_PARCIAL      : 'And*** Her***',
+  NOMBRE_PARCIAL      : 'And*** Her***',           // lo que ve el cliente
+  NOMBRE_TITULAR_REAL : 'Andrea Hernandez',         // para verificar captura
+  NOMBRE_TITULAR_REAL2: 'Andrea Hernandez Salcedo', // variante con apellido
+  NOMBRE_NEGOCIO      : 'Academia ICFES',
 
-  NOMBRE_NEGOCIO      : 'Mega Pack ICFES',
-  ADMIN_KEY           : process.env.ADMIN_KEY || 'admin-icfes-2024',
-  PORT                : process.env.PORT || 3000,
+  // Admin
+  ADMIN_KEY          : process.env.ADMIN_KEY || 'admin-icfes-2024',
+
+  PORT               : process.env.PORT || 3000,
 };
-
-
 
 // ══════════════════════════════════════════════
 // 📦 PRODUCTO
 // ══════════════════════════════════════════════
 const PRODUCTO = {
   id          : 'mega-pack-icfes',
-  nombre      : 'Mega Pack ICFES 2026',
+  nombre      : '📚 Mega Pack ICFES 2026',
+  descripcion : 'Todo lo que necesitas para prepararte y ganarle al ICFES. Material completo y actualizado para el 2026.',
   precio      : 15000,
+  // Link directo a la carpeta de Drive
   link_entrega: 'https://drive.google.com/drive/folders/187flxW4FjDOnDirhTzjaVyB0yUf7L4w4?usp=sharing',
 };
 
 // ══════════════════════════════════════════════
-// 💬 MENSAJES FIJOS
-// ══════════════════════════════════════════════
-
-// Mensaje 1 — texto que acompaña la imagen del flyer
-const SALUDO_MSG1 = `👋 ¡Hola! Qué gusto saludarte 😊
-
-Te cuento sobre el *Mega Pack ICFES 2026* — el material más completo para prepararte con estrategia y sacar el puntaje que mereces 🎯
-
-📦 *¿Qué incluye?*
-🔹 Guía de inicio: cómo sacarle el máximo desde el día 1
-🔹 Metodología paso a paso por áreas
-🔹 Material completo: Lectura Crítica, Matemáticas, Ciencias, Sociales e Inglés
-🔹 Simulacros tipo ICFES desde el año 2000 hasta 2026
-🔹 Cuadernillos oficiales con respuestas explicadas
-🔹 Acceso inmediato de por vida en PDF y Drive`;
-
-// Mensaje 2 — texto que acompaña la imagen muestra + pregunta de pago
-const SALUDO_MSG2 = `👆 Así se ve el material por dentro — pruebas reales, organizadas, listas para practicar como si fuera el día del examen 📝
-
-━━━━━━━━━━━━━━━━━━
-❌ ~~$79.000~~
-✅ *HOY: $15.000 COP* 🇨🇴
-━━━━━━━━━━━━━━━━━━
-⏰ Si pagas ahora te llega un *regalo sorpresa* 🎁
-
-¿Con cuál prefieres pagar?
-👉 *Nequi* o *Bre-B*`;
-
-// Datos de pago
-const DATOS_PAGO = `💳 *Datos para tu pago de $15.000 COP:*
-
-*Nequi:*
-${CONFIG.NEQUI_NUMERO}
-
-*Llave Bre-B:*
-${CONFIG.LLAVE_BREB}
-
-A nombre de *${CONFIG.NOMBRE_PARCIAL}*
-
-Cuando hagas el pago, mándame la *captura de pantalla* del comprobante y te entrego el material al instante 📥`;
-
-// ══════════════════════════════════════════════
-// 🗄️  SESIONES
+// 🗄️  SESIONES EN MEMORIA
 // ══════════════════════════════════════════════
 const sesiones = new Map();
 const transaccionesUsadas = new Set();
 
+// Limpiar sesiones mayores a 24h
 setInterval(() => {
   const limite = Date.now() - 86_400_000;
   for (const [tel, s] of sesiones) {
@@ -100,7 +73,7 @@ function getSesion(telefono) {
   if (!sesiones.has(telefono)) {
     sesiones.set(telefono, {
       mensajes        : [],
-      estado          : 'nuevo',
+      estado          : 'conversando', // conversando | esperando_pago | verificando
       ultimaActividad : Date.now(),
     });
   }
@@ -110,7 +83,7 @@ function getSesion(telefono) {
 }
 
 // ══════════════════════════════════════════════
-// 📤 ENVIAR POR WHATSAPP
+// 📤 ENVIAR POR WHATSAPP (Evolution API)
 // ══════════════════════════════════════════════
 const EVO_HEADERS = {
   'apikey'      : CONFIG.EVOLUTION_API_KEY,
@@ -124,103 +97,152 @@ async function enviarTexto(telefono, texto) {
       { number: telefono, text: texto },
       { headers: EVO_HEADERS }
     );
+    console.log(`✅ Mensaje → ${telefono}`);
   } catch (e) {
-    console.error(`❌ enviarTexto:`, e.response?.data || e.message);
+    console.error(`❌ enviarTexto error:`, e.response?.data || e.message);
   }
 }
 
-
-
 async function entregarProducto(telefono) {
   try {
-    await enviarTexto(telefono,
-      `✅ *¡Pago confirmado!* Aquí está tu material 🎉\n\n` +
+    const mensaje =
+      `🎉 *¡Pago confirmado!*\n\n` +
+      `Aquí está tu *${PRODUCTO.nombre}*:\n\n` +
       `🔗 ${PRODUCTO.link_entrega}\n\n` +
-      `Descarga todo y guárdalo bien. ¡Mucho éxito en el ICFES! 💪🏆`
-    );
-    console.log(`📦 Entregado → ${telefono}`);
+      `Accede al link, descarga todos los archivos y guárdalos bien. ¡Mucho éxito en el ICFES! 💪`;
+
+    await enviarTexto(telefono, mensaje);
+    console.log(`📦 Producto entregado → ${telefono}`);
   } catch (e) {
-    console.error(`❌ entregarProducto:`, e.message);
-    await enviarTexto(telefono, `😅 Problema enviando el link. Escríbenos y te lo mandamos ahora.`);
+    console.error(`❌ entregarProducto error:`, e.message);
+    await enviarTexto(
+      telefono,
+      `😅 Tuve un problema enviando el link. Escríbenos de nuevo y te lo mandamos de inmediato.`
+    );
   }
 }
 
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 
 // ══════════════════════════════════════════════
-// 🤖 PROMPT VENDEDOR — tono balanceado
+// 💬 SALUDO INICIAL (fijo, no consume tokens)
+// ══════════════════════════════════════════════
+const SALUDO_INICIAL = `👋 ¡Hola! Qué gusto saludarte 😊 Gracias por interesarte en *Mega Pack ICFES 2026* 💡
+
+📚 ¿Quieres sacar un puntaje alto en el ICFES sin perder tiempo?
+Te presento el pack más completo, organizado y fácil de usar para estudiar con estrategia y resultados 💪🎯
+
+💼 *¿Qué es Mega Pack ICFES 2026?*
+Un súper paquete digital que te ayuda a estudiar lo que realmente importa, con recursos claros, efectivos y listos para usar desde el primer día 🚀
+
+📦 *¿Qué incluye este pack increíble?*
+
+🔹 *1. Guía inicial:*
+📌 "Lee esto antes de empezar" – instrucciones para sacarle el máximo provecho desde el primer momento.
+
+🔹 *2. Metodología paso a paso:*
+🎯 Aprende a estudiar de forma estratégica, sin perder tiempo en contenido innecesario.
+
+🔹 *3. Material por ÁREAS del examen:*
+✔ Lectura Crítica
+✔ Matemáticas
+✔ Ciencias Naturales
+✔ Sociales y Ciudadanas
+✔ Inglés
+
+Cada área incluye:
+📖 Guía clara | 📝 Ejercicios tipo ICFES | 📂 Material de apoyo | 🎯 Simulacros específicos
+
+🔹 *4. Simulacros Generales y Premium:*
+✅ ¡Simula el examen real y mejora tus resultados con práctica inteligente!
+
+━━━━━━━━━━━━━━━━━━━━
+❌ ANTES: $79.000
+✅ *SOLO HOY: $15.000 COP* 🇨🇴✨
+━━━━━━━━━━━━━━━━━━━━
+
+⏰ Si confirmas tu pago en menos de 10 minutos, te envío un *REGALO SORPRESA* 🎁✨
+
+🛒 *¿Con qué método prefieres pagar?*
+👇 Responde: *Nequi* o *Bre-B*`;
+
+// ══════════════════════════════════════════════
+// 🤖 PROMPTS PARA CLAUDE
 // ══════════════════════════════════════════════
 function promptVendedor() {
-  return `Eres el asistente de ventas del *Mega Pack ICFES 2026* en Colombia.
-El cliente ya vio toda la información del producto y el precio es $15.000 COP.
-Tu estilo: amigo que conoce bien el tema + vendedor que sabe cerrar. Cálido pero directo.
+  return `Eres un asistente de ventas amable de "${CONFIG.NOMBRE_NEGOCIO}" en Colombia.
+Vendes material de preparación para el ICFES por WhatsApp.
 
-REGLAS:
-- Máximo 3 líneas por respuesta
-- Si preguntan algo del contenido, responde brevemente y redirige a pagar
-- Si dudan del precio, recuérdales que era $79.000 y hoy es $15.000
-- Crea urgencia natural: "es por hoy", "acceso inmediato", "ya varios lo están pidiendo"
-- Cuando confirmen que quieren comprar o pregunten cómo pagar, responde SOLO:
+PRODUCTO:
+• ${PRODUCTO.nombre} — $${PRODUCTO.precio.toLocaleString('es-CO')} COP
+  ${PRODUCTO.descripcion}
+
+INSTRUCCIONES:
+- Saluda con calidez al inicio
+- Pregunta en qué grado está o cuándo presenta el ICFES
+- Explica el valor del Mega Pack según su situación
+- Mensajes cortos (máximo 4 líneas), usa negrillas con *asteriscos* para lo importante
+- Usa emojis con moderación
+- Cuando el cliente confirme que quiere comprar, responde SOLO con este JSON exacto:
   {"accion":"mostrar_pago"}
-- Si dicen "ya pagué", "hice la transferencia", "ya lo hice" o suben imagen, responde SOLO:
+- Si el cliente dice "ya pagué", "hice la transferencia", "ya te mandé la plata" o similar:
   {"accion":"pedir_captura"}
-- NUNCA des el número de cuenta ni el nombre del titular
-- NUNCA hagas más de una pregunta por mensaje
-- Habla en español colombiano, natural y cercano`;
+- Si preguntan por métodos de pago, explica: Nequi, Bancolombia o Bre-B
+- Habla en español colombiano natural, como si fuera un amigo que sabe del tema
+- No presiones, sé genuinamente útil
+
+IMPORTANTE: Solo responde con el JSON cuando el cliente confirme compra o diga que ya pagó. En cualquier otro caso responde normalmente en texto.`;
 }
 
-// ══════════════════════════════════════════════
-// 👁️  PROMPT VERIFICACIÓN — zona horaria Colombia
-// ══════════════════════════════════════════════
 function promptVerificarCaptura() {
-  // Fecha actual en Colombia (UTC-5)
   const ahora = new Date();
-  const colombiaOffset = -5 * 60;
   const utc = ahora.getTime() + ahora.getTimezoneOffset() * 60000;
-  const fechaColombia = new Date(utc + colombiaOffset * 60000);
-  const hoy = fechaColombia.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
-  const ayer = new Date(fechaColombia);
-  ayer.setDate(ayer.getDate() - 1);
+  const col = new Date(utc + (-5 * 60 * 60000));
+  const hoy = col.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  const ayer = new Date(col); ayer.setDate(ayer.getDate() - 1);
   const ayerStr = ayer.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  return `Eres un verificador de pagos para Colombia. Analiza la captura de pantalla.
+  return `Eres un verificador de pagos para Colombia.
 
-FECHA ACTUAL EN COLOMBIA: ${hoy}
+FECHA HOY EN COLOMBIA: ${hoy}
 FECHAS VÁLIDAS: ${hoy} o ${ayerStr}
 
-PAGO VÁLIDO SI cumple TODOS estos criterios:
-1. Monto: exactamente $15.000 COP (puede aparecer como 15000, 15.000, $15,000 o 15.000,00)
-2. Nombre receptor visible: "Andrea Hernandez" O "Andrea Hernandez Salcedo"
-3. Fecha: ${hoy} o ${ayerStr} — sé flexible con el formato de fecha (puede ser 12/03/2026, marzo 12, etc.)
-4. Parece captura real de Nequi, Bancolombia, Daviplata u otra app bancaria colombiana
+PAGO VÁLIDO SI cumple TODO:
+1. Monto exacto: $15.000 COP (puede aparecer como 15000, 15.000 o 15.000,00)
+2. Nombre receptor: "Andrea Hernandez" O "Andrea Hernandez Salcedo"
+3. Fecha: hoy o ayer según Colombia — acepta cualquier formato de fecha
+4. Captura real de app bancaria colombiana (Nequi, Daviplata, Bancolombia, etc.)
 
-IMPORTANTE sobre fechas: las capturas de Nequi muestran la fecha en formato colombiano. Acepta cualquier formato que corresponda a hoy o ayer según Colombia.
-
-RESPONDE SOLO con este JSON (sin texto extra):
+RESPONDE SOLO con este JSON (sin texto extra, sin bloques de código):
 {
   "valido": true,
   "monto_detectado": 15000,
   "fecha_detectada": "texto exacto de la fecha en la imagen",
-  "numero_transaccion": "referencia o código único o null",
+  "numero_transaccion": "referencia única o null",
   "banco_detectado": "nombre del banco o null",
   "nombre_pagador": "quien envió o null",
   "razon_rechazo": null
 }
 
 Si algo no cuadra: valido false con razon_rechazo claro.
-Si la imagen parece editada: valido false, razon_rechazo "imagen manipulada".`;
+Si imagen parece editada: valido false.`;
+}
+
+Si no es válido, pon valido: false y explica en razon_rechazo por qué.
+Si la imagen parece editada o manipulada, valido: false.
+Si no se puede ver bien el monto, valido: false.`;
 }
 
 // ══════════════════════════════════════════════
-// 🧠 CLAUDE TEXTO
+// 🧠 LLAMADAS A CLAUDE
 // ══════════════════════════════════════════════
-async function claudeChat(mensajes) {
+async function claudeChat(mensajes, systemPrompt) {
   const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
     {
       model      : 'claude-sonnet-4-20250514',
-      max_tokens : 200,
-      system     : promptVendedor(),
+      max_tokens : 400,
+      system     : systemPrompt,
       messages   : mensajes,
     },
     {
@@ -234,21 +256,21 @@ async function claudeChat(mensajes) {
   return response.data.content[0].text;
 }
 
-// ══════════════════════════════════════════════
-// 👁️  CLAUDE VISIÓN
-// ══════════════════════════════════════════════
 async function claudeVision(imagenBase64, mediaType) {
   const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
     {
       model      : 'claude-sonnet-4-20250514',
-      max_tokens : 300,
+      max_tokens : 400,
       system     : promptVerificarCaptura(),
       messages   : [{
         role    : 'user',
         content : [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imagenBase64 } },
-          { type: 'text',  text: 'Analiza este comprobante de pago.' },
+          {
+            type   : 'image',
+            source : { type: 'base64', media_type: mediaType, data: imagenBase64 },
+          },
+          { type: 'text', text: 'Analiza este comprobante y responde con el JSON.' },
         ],
       }],
     },
@@ -264,79 +286,83 @@ async function claudeVision(imagenBase64, mediaType) {
 }
 
 // ══════════════════════════════════════════════
-// 💬 PROCESAR TEXTO
+// 💬 PROCESAR MENSAJE DE TEXTO
 // ══════════════════════════════════════════════
 async function procesarTexto(telefono, texto) {
   const sesion = getSesion(telefono);
 
-  // ── PRIMER MENSAJE → bienvenida en 2 partes con imágenes ──
-  if (sesion.estado === 'nuevo') {
-    sesion.estado = 'esperando_decision';
-
-    await enviarTexto(telefono, SALUDO_MSG1);
-    await esperar(1500);
-    await enviarTexto(telefono, SALUDO_MSG2);
-
+  // ── PRIMER MENSAJE → saludo fijo sin gastar tokens ──
+  if (sesion.mensajes.length === 0) {
     sesion.mensajes.push({ role: 'user', content: texto });
-    sesion.mensajes.push({ role: 'assistant', content: SALUDO_MSG1 + '\n\n' + SALUDO_MSG2 });
+    sesion.mensajes.push({ role: 'assistant', content: SALUDO_INICIAL });
+    await enviarTexto(telefono, SALUDO_INICIAL);
     return;
   }
 
-  // ── DETECTAR "YA PAGUÉ" directamente sin gastar Claude ──
+  // ── DETECTAR "YA PAGUÉ" sin llamar a Claude ──
   const textoBajo = texto.toLowerCase();
-  const yaPago = ['ya pagué','ya pague','ya transferí','ya transf','hice el pago',
-    'te mandé','te mande','listo pagué','listo pague','ya lo hice','pague','pagué',
-    'ya te mandé','ya te mande','realicé','realize'].some(p => textoBajo.includes(p));
-
+  const yaPago = ['ya pagué','ya pague','hice el pago','te mandé','te mande',
+    'ya lo hice','pague','pagué','ya te mandé','ya te mande','transferí','realize'].some(p => textoBajo.includes(p));
   if (yaPago) {
     await enviarTexto(telefono, `📸 Perfecto, mándame la *captura del comprobante* y verifico al instante.`);
     sesion.estado = 'esperando_pago';
     return;
   }
 
-  // ── CLAUDE responde ──
   sesion.mensajes.push({ role: 'user', content: texto });
 
   let respuesta;
   try {
-    respuesta = await claudeChat(sesion.mensajes.slice(-10));
+    respuesta = await claudeChat(sesion.mensajes.slice(-16), promptVendedor());
   } catch (e) {
     console.error('❌ Claude error:', e.message);
-    await enviarTexto(telefono, 'Disculpa, tuve un error. Escríbeme de nuevo 🙏');
+    await enviarTexto(telefono, 'Disculpa, tuve un error. Escríbeme de nuevo en un momento 🙏');
     return;
   }
 
   sesion.mensajes.push({ role: 'assistant', content: respuesta });
 
-  // Detectar acción JSON
+  // Detectar si Claude devolvió una acción JSON
   let accion = null;
   try {
     const match = respuesta.match(/\{[\s\S]*?"accion"[\s\S]*?\}/);
     if (match) accion = JSON.parse(match[0]);
   } catch (_) {}
 
+  // ── ACCIÓN: mostrar datos de pago ──
   if (accion?.accion === 'mostrar_pago') {
     sesion.estado = 'esperando_pago';
-    await enviarTexto(telefono, DATOS_PAGO);
+    const instrucciones =
+      `💳 *Datos para tu pago de $15.000 COP:*\n\n` +
+      `*Nequi 📱*\n${CONFIG.NEQUI_NUMERO}\n\n` +
+      `*Bre-B 🔑*\n${CONFIG.LLAVE_BREB}\n\n` +
+      `A nombre de: *${CONFIG.NOMBRE_PARCIAL}*\n\n` +
+      `Cuando hagas el pago, mándame la *captura de pantalla* del comprobante y te envío el material al instante 📥`;
+    await enviarTexto(telefono, instrucciones);
     return;
   }
 
+  // ── ACCIÓN: pedir captura ──
   if (accion?.accion === 'pedir_captura') {
+    await enviarTexto(
+      telefono,
+      `📸 Listo, mándame la captura de pantalla del comprobante de pago y lo verifico enseguida.`
+    );
     sesion.estado = 'esperando_pago';
-    await enviarTexto(telefono, `📸 Listo, mándame la *captura del comprobante* y te entrego el material al instante.`);
     return;
   }
 
+  // ── Respuesta normal de texto ──
   await enviarTexto(telefono, respuesta);
 }
 
 // ══════════════════════════════════════════════
-// 🧾 VERIFICAR CAPTURA
+// 🧾 VERIFICAR CAPTURA DE PAGO
 // ══════════════════════════════════════════════
 async function procesarCaptura(telefono, imagenBase64, mediaType) {
   const sesion = getSesion(telefono);
 
-  await enviarTexto(telefono, `🔍 Verificando tu pago...`);
+  await enviarTexto(telefono, `Revisando tu comprobante... 🔍`);
   sesion.estado = 'verificando';
 
   let resultado;
@@ -345,54 +371,66 @@ async function procesarCaptura(telefono, imagenBase64, mediaType) {
     const match = raw.match(/\{[\s\S]*\}/);
     resultado = match ? JSON.parse(match[0]) : null;
   } catch (e) {
-    console.error('❌ Vision error:', e.message);
-    await enviarTexto(telefono, `No pude leer la imagen 😅 Mándala de nuevo con buena calidad.`);
+    console.error('❌ Error verificando captura:', e.message);
+    await enviarTexto(
+      telefono,
+      `Tuve un problema leyendo la imagen 😅\nMándala de nuevo asegurándote que se vea claro el monto y la referencia.`
+    );
     sesion.estado = 'esperando_pago';
     return;
   }
 
   if (!resultado) {
-    await enviarTexto(telefono, `No pude leer el comprobante. ¿Lo mandas de nuevo? 📸`);
+    await enviarTexto(telefono, `No pude leer el comprobante 🤔 ¿Puedes mandarlo de nuevo con mejor calidad?`);
     sesion.estado = 'esperando_pago';
     return;
   }
 
-  console.log(`🔍 Verificación ${telefono}:`, JSON.stringify(resultado));
+  console.log(`🔍 Verificación ${telefono}:`, resultado);
 
-  // ── VÁLIDO ──
+  // ── PAGO VÁLIDO ──
   if (resultado.valido) {
     const txn = resultado.numero_transaccion;
 
+    // Anti-fraude: misma transacción no se usa dos veces
     if (txn && transaccionesUsadas.has(txn)) {
-      await enviarTexto(telefono, `⚠️ Este comprobante ya fue usado. Si es un error escríbenos.`);
+      await enviarTexto(
+        telefono,
+        `⚠️ Este comprobante ya fue usado antes. Si crees que hay un error escríbenos.`
+      );
       sesion.estado = 'conversando';
       return;
     }
+
     if (txn) transaccionesUsadas.add(txn);
 
-    await enviarTexto(telefono,
-      `✅ *¡Pago confirmado!* Recibimos *$${Number(resultado.monto_detectado).toLocaleString('es-CO')} COP* 🎉\n\nTe envío el material ahora mismo 📥`
+    const nombre = resultado.nombre_pagador ? ` *${resultado.nombre_pagador}*,` : '';
+    await enviarTexto(
+      telefono,
+      `🎉 ¡Pago confirmado!${nombre} recibimos *$${Number(resultado.monto_detectado).toLocaleString('es-CO')} COP*\n\nTe envío el material ahora mismo 📥`
     );
+
     await esperar(800);
     await entregarProducto(telefono);
-    sesion.estado = 'conversando';
-    console.log(`💰 VENTA | ${telefono} | Txn: ${txn}`);
 
-  // ── INVÁLIDO ──
+    sesion.estado = 'conversando';
+    console.log(`💰 VENTA | ${PRODUCTO.nombre} | ${telefono} | Txn: ${txn}`);
+
+  // ── PAGO INVÁLIDO ──
   } else {
     const razon = (resultado.razon_rechazo || '').toLowerCase();
     let msg;
 
     if (razon.includes('monto') || razon.includes('valor') || razon.includes('15')) {
-      msg = `El monto no coincide ❌\nEl valor exacto es *$15.000 COP*. Verifica y manda la captura de nuevo.`;
-    } else if (razon.includes('nombre') || razon.includes('titular') || razon.includes('destinat')) {
-      msg = `El destinatario no coincide ❌\nVerifica que estés pagando a la cuenta correcta y manda la captura de nuevo.`;
-    } else if (razon.includes('edit') || razon.includes('manipul')) {
-      msg = `⚠️ La imagen no parece un comprobante original. Mándala directamente desde tu app bancaria.`;
+      msg = `El monto no coincide 🤔\n\nEl valor exacto es *$${PRODUCTO.precio.toLocaleString('es-CO')} COP*. Asegúrate de enviar ese valor y manda la captura de nuevo.`;
+    } else if (razon.includes('edit') || razon.includes('manipul') || razon.includes('falso')) {
+      msg = `⚠️ La imagen no parece un comprobante original. Manda la captura directamente desde tu app bancaria.`;
     } else if (razon.includes('fecha') || razon.includes('antig')) {
-      msg = `La fecha del comprobante no corresponde a hoy 📅\nSolo acepto pagos de hoy o ayer.`;
+      msg = `La fecha del comprobante parece muy antigua 📅 Solo acepto pagos de hoy o ayer.`;
+    } else if (razon.includes('no parece') || razon.includes('comprobante') || razon.includes('no es')) {
+      msg = `No reconocí esto como un comprobante 🤔\n\nManda la captura desde Nequi, Bancolombia o tu app bancaria donde diga que la transferencia fue exitosa.`;
     } else {
-      msg = `No pude confirmar el pago 😅\n${resultado.razon_rechazo || 'Intenta de nuevo.'}\nManda la captura de nuevo.`;
+      msg = `No pude confirmar el pago 😅\n\n${resultado.razon_rechazo || 'Intenta de nuevo o escríbenos para ayudarte.'}`;
     }
 
     await enviarTexto(telefono, msg);
@@ -401,13 +439,14 @@ async function procesarCaptura(telefono, imagenBase64, mediaType) {
 }
 
 // ══════════════════════════════════════════════
-// 📥 WEBHOOK EVOLUTION API
+// 📥 WEBHOOK — EVOLUTION API
 // ══════════════════════════════════════════════
 app.post('/webhook/evolution', async (req, res) => {
   res.sendStatus(200);
 
   try {
     const body = req.body;
+
     if (body.event !== 'messages.upsert') return;
 
     const data = body.data;
@@ -415,7 +454,7 @@ app.post('/webhook/evolution', async (req, res) => {
     if (data.key?.fromMe) return;
 
     const remoteJid = data.key?.remoteJid || '';
-    if (remoteJid.includes('@g.us')) return;
+    if (remoteJid.includes('@g.us')) return; // ignorar grupos
 
     const telefono = remoteJid.replace('@s.whatsapp.net', '');
     if (!telefono) return;
@@ -435,28 +474,29 @@ app.post('/webhook/evolution', async (req, res) => {
     if (mensaje.imageMessage) {
       console.log(`📸 Imagen de ${telefono}`);
       try {
-        const r = await axios.post(
+        const res2 = await axios.post(
           `${CONFIG.EVOLUTION_URL}/chat/getBase64FromMediaMessage/${CONFIG.EVOLUTION_INSTANCE}`,
           { message: { key: data.key, message: mensaje } },
           { headers: EVO_HEADERS }
         );
-        const base64 = r.data?.base64;
+        const base64 = res2.data?.base64;
         const mime   = mensaje.imageMessage.mimetype || 'image/jpeg';
+
         if (base64) {
           await procesarCaptura(telefono, base64, mime);
         } else {
-          await enviarTexto(telefono, `No pude leer tu imagen 😅 Mándala de nuevo.`);
+          await enviarTexto(telefono, `No pude leer tu imagen 😅 ¿Puedes mandarla de nuevo?`);
         }
       } catch (e) {
-        console.error('❌ Imagen error:', e.message);
-        await enviarTexto(telefono, `Error al recibir la imagen. Inténtalo de nuevo 📸`);
+        console.error('❌ Error imagen:', e.message);
+        await enviarTexto(telefono, `No pude descargar la imagen 😅 Inténtalo de nuevo.`);
       }
       return;
     }
 
-    // ── OTROS ──
+    // ── AUDIO / VIDEO / STICKER ──
     if (mensaje.audioMessage || mensaje.videoMessage || mensaje.stickerMessage) {
-      await enviarTexto(telefono, `Solo puedo leer texto e imágenes 😊 ¿Te interesa el Mega Pack ICFES?`);
+      await enviarTexto(telefono, `Solo puedo leer mensajes de texto e imágenes 😊 ¿En qué te puedo ayudar?`);
     }
 
   } catch (e) {
@@ -469,17 +509,20 @@ app.post('/webhook/evolution', async (req, res) => {
 // ══════════════════════════════════════════════
 app.get('/health', (_req, res) => {
   res.json({
-    status  : '✅ Bot activo',
-    sesiones: sesiones.size,
-    ventas  : transaccionesUsadas.size,
+    status    : '✅ Bot activo',
+    producto  : PRODUCTO.nombre,
+    precio    : `$${PRODUCTO.precio.toLocaleString('es-CO')} COP`,
+    sesiones  : sesiones.size,
+    ventas    : transaccionesUsadas.size,
   });
 });
 
+// Entrega manual si algo falla
 app.post('/admin/entregar', async (req, res) => {
   const { telefono, adminKey } = req.body;
   if (adminKey !== CONFIG.ADMIN_KEY) return res.status(401).json({ error: 'No autorizado' });
   await entregarProducto(telefono);
-  res.json({ ok: true });
+  res.json({ ok: true, mensaje: `Entregado a ${telefono}` });
 });
 
 // ══════════════════════════════════════════════
@@ -487,11 +530,12 @@ app.post('/admin/entregar', async (req, res) => {
 // ══════════════════════════════════════════════
 app.listen(CONFIG.PORT, () => {
   console.log(`
-╔══════════════════════════════════════════╗
-║  🤖 BOT ICFES 2026 — ACTIVO              ║
-║  Precio   : $15.000 COP                  ║
-║  Cobro    : Nequi / Bre-B                ║
-║  Modo     : 2 mensajes de texto          ║
-╚══════════════════════════════════════════╝
+╔═══════════════════════════════════════════╗
+║   🤖 BOT WHATSAPP IA — ICFES 2026         ║
+║   Puerto    : ${CONFIG.PORT}                        ║
+║   Producto  : ${PRODUCTO.nombre}    ║
+║   Precio    : $${PRODUCTO.precio.toLocaleString('es-CO')} COP              ║
+║   Cobro     : Nequi / Bre-B               ║
+╚═══════════════════════════════════════════╝
   `);
 });
