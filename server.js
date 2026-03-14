@@ -29,10 +29,7 @@ const CONFIG = {
   PORT                : process.env.PORT || 3000,
 };
 
-// ══════════════════════════════════════════════
-// 🖼️  IMÁGENES (cargadas desde imagenes.js)
-// ══════════════════════════════════════════════
-const IMAGENES = require('./imagenes');
+
 
 // ══════════════════════════════════════════════
 // 📦 PRODUCTO
@@ -132,26 +129,7 @@ async function enviarTexto(telefono, texto) {
   }
 }
 
-async function enviarImagen(telefono, base64Data, caption = '') {
-  try {
-    await axios.post(
-      `${CONFIG.EVOLUTION_URL}/message/sendMedia/${CONFIG.EVOLUTION_INSTANCE}`,
-      {
-        number   : telefono,
-        mediatype: 'image',
-        mimetype : 'image/jpeg',
-        media    : base64Data,
-        caption  : caption,
-      },
-      { headers: EVO_HEADERS, timeout: 30000 }
-    );
-    console.log(`🖼️ Imagen enviada → ${telefono}`);
-  } catch (e) {
-    console.error(`❌ enviarImagen falló:`, e.response?.data || e.message);
-    // Fallback: enviar solo el texto si la imagen falla
-    if (caption) await enviarTexto(telefono, caption);
-  }
-}
+
 
 async function entregarProducto(telefono) {
   try {
@@ -295,12 +273,9 @@ async function procesarTexto(telefono, texto) {
   if (sesion.estado === 'nuevo') {
     sesion.estado = 'esperando_decision';
 
-    // Parte 1: flyer del pack
-    await enviarImagen(telefono, IMAGENES.flyer, SALUDO_MSG1);
-    await esperar(2500);
-
-    // Parte 2: muestra del material + precio + pregunta
-    await enviarImagen(telefono, IMAGENES.muestra, SALUDO_MSG2);
+    await enviarTexto(telefono, SALUDO_MSG1);
+    await esperar(1500);
+    await enviarTexto(telefono, SALUDO_MSG2);
 
     sesion.mensajes.push({ role: 'user', content: texto });
     sesion.mensajes.push({ role: 'assistant', content: SALUDO_MSG1 + '\n\n' + SALUDO_MSG2 });
@@ -516,7 +491,7 @@ app.listen(CONFIG.PORT, () => {
 ║  🤖 BOT ICFES 2026 — ACTIVO              ║
 ║  Precio   : $15.000 COP                  ║
 ║  Cobro    : Nequi / Bre-B                ║
-║  Imágenes : configurar IDs en IMAGENES   ║
+║  Modo     : 2 mensajes de texto          ║
 ╚══════════════════════════════════════════╝
   `);
 });
