@@ -305,6 +305,20 @@ async function procesarTexto(telefono, texto) {
     return;
   }
 
+  // ── DETECCIÓN DIRECTA DE MÉTODO DE PAGO → datos de pago sin llamar a Claude ──
+  const quierePagar = ['nequi','bre-b','breb','bre b','por nequi','con nequi','por bre'].some(p => textoBajo.includes(p));
+  if (quierePagar) {
+    sesion.estado = 'esperando_pago';
+    const instrucciones =
+      `💳 *Datos para tu pago de $15.000 COP:*\n\n` +
+      `*Nequi 📱*\n${CONFIG.NEQUI_NUMERO}\n\n` +
+      `*Bre-B 🔑*\n${CONFIG.LLAVE_BREB}\n\n` +
+      `A nombre de: *${CONFIG.NOMBRE_PARCIAL}*\n\n` +
+      `Cuando hagas el pago, mándame la *captura de pantalla* del comprobante y te envío el material al instante 📥`;
+    await enviarTexto(telefono, instrucciones);
+    return;
+  }
+
   sesion.mensajes.push({ role: 'user', content: texto });
 
   let respuesta;
