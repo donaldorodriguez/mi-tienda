@@ -228,10 +228,6 @@ Si algo no cuadra: valido false con razon_rechazo claro.
 Si imagen parece editada: valido false.`;
 }
 
-Si no es válido, pon valido: false y explica en razon_rechazo por qué.
-Si la imagen parece editada o manipulada, valido: false.
-Si no se puede ver bien el monto, valido: false.`;
-}
 
 // ══════════════════════════════════════════════
 // 🧠 LLAMADAS A CLAUDE
