@@ -367,7 +367,7 @@ app.post('/webhook/evolution', async (req, res) => {
       texto   : body.data?.message?.conversation || body.data?.message?.extendedTextMessage?.text || null,
     }));
 
-    if (body.event !== 'messages.upsert') return;
+    if (!['messages.upsert', 'messages.update'].includes(body.event)) return;
     const data = body.data;
     if (!data || data.key?.fromMe) return;
     const remoteJid = data.key?.remoteJid || '';
@@ -377,7 +377,22 @@ app.post('/webhook/evolution', async (req, res) => {
     const mensaje = data.message;
     if (!mensaje) return;
 
-    const texto = mensaje.conversation || mensaje.extendedTextMessage?.text;
+    // Extraer texto de TODOS los tipos de mensaje posibles
+    // incluyendo mensajes de anuncios Click-to-WhatsApp
+    const texto =
+      mensaje.conversation ||
+      mensaje.extendedTextMessage?.text ||
+      mensaje.buttonsResponseMessage?.selectedDisplayText ||
+      mensaje.templateButtonReplyMessage?.selectedDisplayText ||
+      mensaje.listResponseMessage?.title ||
+      mensaje.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson ||
+      // Click-to-WhatsApp trae el mensaje aquí
+      mensaje.ephemeralMessage?.message?.conversation ||
+      mensaje.ephemeralMessage?.message?.extendedTextMessage?.text ||
+      mensaje.viewOnceMessage?.message?.conversation ||
+      // Si viene cualquier tipo de mensaje pero sin texto, tratar como "Hola"
+      (Object.keys(mensaje).length > 0 ? 'Hola' : null);
+
     if (texto?.trim()) {
       console.log(`📩 ${telefono}: ${texto.trim()}`);
       await procesarTexto(telefono, texto.trim());
