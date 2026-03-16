@@ -16,56 +16,46 @@ const CONFIG = {
   EVOLUTION_URL       : 'https://evolution-api-production-905e.up.railway.app',
   EVOLUTION_API_KEY   : 'db25dfe6adad17eeea9555433007cccad3372320ae2f9051ba8a4791694aa3db',
   EVOLUTION_INSTANCE  : 'Mi-tienda',
-  NEQUI               : '3003843676',
-  BREB                : '3003843676',
+  NEQUI               : '3003843676',        // ← actualiza si cambia
+  BREB                : '3003843676',        // ← actualiza si cambia
   NOMBRE_PARCIAL      : 'And*** Her***',
   NOMBRE_REAL_1       : 'Andrea Hernandez',
   NOMBRE_REAL_2       : 'Andrea Hernandez Salcedo',
-  LINK_PRODUCTO       : 'https://drive.google.com/drive/folders/187flxW4FjDOnDirhTzjaVyB0yUf7L4w4?usp=sharing',
-  ADMIN_KEY           : process.env.ADMIN_KEY || 'admin-icfes-2024',
+  LINK_PRODUCTO       : 'https://drive.google.com/drive/u/0/folders/1ITXM4pV90akRQYak80-KmdkZ8BsvSsnE', // ← actualiza con el link del pack
+  PRECIO              : 15000,
+  PRECIO_ANTES        : 47000,
+  ADMIN_KEY           : process.env.ADMIN_KEY || 'admin-estimulacion-2024',
   PORT                : process.env.PORT || 3000,
 };
 
 // ══════════════════════════════════════════════
 // 💬 MENSAJES FIJOS — el código los envía, Claude nunca los toca
 // ══════════════════════════════════════════════
-const MSG_BIENVENIDA = `👋 ¡Hola! Qué gusto saludarte 😊 Gracias por interesarte en *Mega Pack ICFES 2026* 💡
+const MSG_BIENVENIDA = `¡Hola! 👋🏻 Qué alegría saludarte, gracias por escribirnos ✨
 
-📚 ¿Quieres sacar un puntaje alto en el ICFES sin perder tiempo?
-Te presento el pack más completo, organizado y fácil de usar para estudiar con estrategia y resultados 💪🎯
+El *Mega Pack de Estimulación Temprana* está pensado para acompañar el desarrollo de tu peque con actividades prácticas, divertidas y sin pantallas, desde los *0 hasta los 8 añitos.*
 
-💼 *¿Qué es Mega Pack ICFES 2026?*
-Un súper paquete digital que te ayuda a estudiar lo que realmente importa, con recursos claros, efectivos y listos para usar desde el primer día 🚀
+🧠 Más de 1.200 actividades imprimibles
+📚 Organizadas por edad y habilidad: lenguaje, motricidad, atención, memoria, lectoescritura, pensamiento lógico, matemáticas, inglés y más
+📥 Material 100% digital — Descarga inmediata
 
-📦 *¿Qué incluye este pack increíble?*
+Precio anterior: $47.000 ❌
+*HOY solo: $15.000* ✅
 
-🔹 *1. Guía inicial:*
-📌 "Lee esto antes de empezar" – instrucciones para sacarle el máximo provecho desde el primer momento.
+➡️ Puedes comenzar con tu hijo hoy mismo, a su ritmo y sin complicaciones.
 
-🔹 *2. Metodología paso a paso:*
-🎯 Aprende a estudiar de forma estratégica, sin perder tiempo en contenido innecesario.
+🎁 *Y al adquirirlo HOY recibes estos bonos totalmente GRATIS:*
+• Colección completa del método Coquito
+• Actividades del método Coquito para iniciar lectura y escritura
+• Material para introducir inglés jugando
+• Juegos de pensamiento lógico y razonamiento
+• Actividades sensoriales + experimentos caseros
+• Guía para padres paso a paso
+• *Actualizaciones gratuitas de por vida* (sin costos adicionales)
 
-🔹 *3. Material por ÁREAS del examen:*
-✔ Lectura Crítica
-✔ Matemáticas
-✔ Ciencias Naturales
-✔ Sociales y Ciudadanas
-✔ Inglés
+👉 Todo pensado para que disfrutes momentos reales de aprendizaje, conexión y avances con tu peque.
 
-Cada área incluye:
-📖 Guía clara | 📝 Ejercicios tipo ICFES | 📂 Material de apoyo | 🎯 Simulacros específicos
-
-🔹 *4. Simulacros Generales y Premium:*
-✅ ¡Simula el examen real y mejora tus resultados con práctica inteligente!
-
-━━━━━━━━━━━━━━━━━━━━
-❌ ANTES: $79.000
-✅ *SOLO HOY: $15.000 COP* 🇨🇴✨
-━━━━━━━━━━━━━━━━━━━━
-
-⏰ Si confirmas tu pago en menos de 10 minutos, te envío un *REGALO SORPRESA* 🎁✨
-
-🛒 *¿Con qué método prefieres pagar?*
+🛒 *¿Con qué prefieres pagar?*
 👇 Responde: *Nequi* o *Bre-B*`;
 
 const MSG_DATOS_PAGO = `💳 *Datos para tu pago de $15.000 COP:*
@@ -78,7 +68,9 @@ ${CONFIG.BREB}
 
 A nombre de: *${CONFIG.NOMBRE_PARCIAL}*
 
-Cuando hagas el pago, mándame la *captura de pantalla* del comprobante y te envío el material al instante 📥`;
+Cuando hagas el pago, mándame la *captura de pantalla* del comprobante y te envío el pack al instante 📥
+
+⏰ Recuerda: este precio es *solo por hoy*`;
 
 const MSG_PEDIR_CAPTURA = `📸 Listo, mándame la *captura de pantalla* del comprobante y lo verifico al instante.`;
 
@@ -143,6 +135,16 @@ const esperar = ms => new Promise(r => setTimeout(r, ms));
 // ══════════════════════════════════════════════
 // 🔍 DETECTORES DE INTENCIÓN (sin Claude)
 // ══════════════════════════════════════════════
+function esProductoEstimulacion(texto) {
+  const t = texto.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quitar tildes
+  return [
+    'estimulacion','estimulación','temprana','estimulacion temprana',
+    'mega pack','megapack','pack estimul','actividades imprimibles',
+    'coquito','motricidad','lectoescritura','estimula'
+  ].some(p => t.includes(p));
+}
+
 function quiereComprar(texto) {
   const t = texto.toLowerCase();
   return [
@@ -150,7 +152,7 @@ function quiereComprar(texto) {
     'quiero','lo quiero','dale','listo','cómo pago','como pago',
     'cómo compro','como compro','me interesa','lo compro',
     'por nequi','con nequi','por bre','acepto','ok','okey','okay',
-    'si','sí','claro','vamos','cómpralo','compralo'
+    'si','sí','claro','vamos','cómpralo','compralo','lo quiero'
   ].some(p => t.includes(p));
 }
 
@@ -254,7 +256,13 @@ async function procesarTexto(telefono, texto) {
     sesion.estado = 'vendiendo';
     sesion.historial.push({ role: 'user', content: texto });
     sesion.historial.push({ role: 'assistant', content: MSG_BIENVENIDA });
-    await enviar(telefono, MSG_BIENVENIDA);
+    // Enviar bienvenida si menciona el producto O si es mensaje genérico
+    if (esProductoEstimulacion(texto) || texto.length < 30) {
+      await enviar(telefono, MSG_BIENVENIDA);
+    } else {
+      // Mensaje que no reconocemos — igual enviamos bienvenida
+      await enviar(telefono, MSG_BIENVENIDA);
+    }
     return;
   }
 
@@ -449,7 +457,7 @@ app.post('/admin/entregar', async (req, res) => {
 app.listen(CONFIG.PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════╗
-║  🤖 BOT ICFES 2026 — ACTIVO              ║
+║  🤖 BOT ESTIMULACIÓN TEMPRANA — ACTIVO   ║
 ║  Nequi/Bre-B : ${CONFIG.NEQUI}          ║
 ║  Titular     : ${CONFIG.NOMBRE_PARCIAL}         ║
 ╚══════════════════════════════════════════╝
