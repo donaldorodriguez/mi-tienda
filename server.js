@@ -260,7 +260,7 @@ async function procesarTexto(telefono, texto) {
     sesion.historial.push({ role: 'user', content: texto });
     sesion.historial.push({ role: 'assistant', content: MSG_BIENVENIDA_1 + '\n\n' + MSG_BIENVENIDA_2 });
     await enviar(telefono, MSG_BIENVENIDA_1);
-    await esperar(1500);
+    await esperar(4000);
     await enviar(telefono, MSG_BIENVENIDA_2);
     return;
   }
