@@ -31,7 +31,7 @@ const CONFIG = {
 // ══════════════════════════════════════════════
 // 💬 MENSAJES FIJOS — el código los envía, Claude nunca los toca
 // ══════════════════════════════════════════════
-const MSG_BIENVENIDA = `¡Hola! 👋🏻 Qué alegría saludarte, gracias por escribirnos ✨
+const MSG_BIENVENIDA_1 = `¡Hola! 👋🏻 Qué alegría saludarte, gracias por escribirnos ✨
 
 El *Mega Pack de Estimulación Temprana* está pensado para acompañar el desarrollo de tu peque con actividades prácticas, divertidas y sin pantallas, desde los *0 hasta los 8 añitos.*
 
@@ -42,9 +42,10 @@ El *Mega Pack de Estimulación Temprana* está pensado para acompañar el desarr
 Precio anterior: $47.000 ❌
 *HOY solo: $15.000* ✅
 
-➡️ Puedes comenzar con tu hijo hoy mismo, a su ritmo y sin complicaciones.
+➡️ Puedes comenzar con tu hijo hoy mismo, a su ritmo y sin complicaciones.`;
 
-🎁 *Y al adquirirlo HOY recibes estos bonos totalmente GRATIS:*
+const MSG_BIENVENIDA_2 = `🎁 *Y al adquirirlo HOY recibes estos bonos totalmente GRATIS:*
+
 • Colección completa del método Coquito
 • Actividades del método Coquito para iniciar lectura y escritura
 • Material para introducir inglés jugando
@@ -57,6 +58,8 @@ Precio anterior: $47.000 ❌
 
 🛒 *¿Con qué prefieres pagar?*
 👇 Responde: *Nequi* o *Bre-B*`;
+
+const MSG_BIENVENIDA = MSG_BIENVENIDA_1; // mantener compatibilidad
 
 const MSG_DATOS_PAGO = `💳 *Datos para tu pago de $15.000 COP:*
 
@@ -255,14 +258,10 @@ async function procesarTexto(telefono, texto) {
   if (sesion.estado === 'nuevo') {
     sesion.estado = 'vendiendo';
     sesion.historial.push({ role: 'user', content: texto });
-    sesion.historial.push({ role: 'assistant', content: MSG_BIENVENIDA });
-    // Enviar bienvenida si menciona el producto O si es mensaje genérico
-    if (esProductoEstimulacion(texto) || texto.length < 30) {
-      await enviar(telefono, MSG_BIENVENIDA);
-    } else {
-      // Mensaje que no reconocemos — igual enviamos bienvenida
-      await enviar(telefono, MSG_BIENVENIDA);
-    }
+    sesion.historial.push({ role: 'assistant', content: MSG_BIENVENIDA_1 + '\n\n' + MSG_BIENVENIDA_2 });
+    await enviar(telefono, MSG_BIENVENIDA_1);
+    await esperar(1500);
+    await enviar(telefono, MSG_BIENVENIDA_2);
     return;
   }
 
